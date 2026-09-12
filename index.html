@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Añadido maximum-scale y user-scalable para mejor comportamiento en pantallas táctiles -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>compras y sumas de precio directo</title>
+</head>
+<body>
+    <style>
+        body{
+            background-color: black;
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+        }
+
+        .contenedor-completo{
+            background:
+            radial-gradient(circle at top left, rgb(53, 53, 53) 20%, transparent 60%),
+            radial-gradient(circle at top right, rgb(53, 53, 53) 20%, transparent 60%),
+            radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.651) 10%, transparent 40%),
+            radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.651) 10%, transparent 40%);
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .camara-digitador{
+            border: 2px solid rgb(255, 255, 255);
+            width: 80%;
+            height: 35%;
+            position: absolute;
+            top: 5%;
+            left: 10%;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #222;
+        }
+
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .muestra-numero-escaneado{
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 2px solid black;
+            border-radius: 20px;
+            width: 80%;
+            height: 45%;
+            position: absolute;
+            top: 45%;
+            left: 10%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-around;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .total{
+            background-color: white;
+            border: 2px solid black;
+            width: 90%;
+            height: 25%;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .capturar-imagen{
+            background-color: greenyellow;
+            border: none;
+            border-radius: 30px;
+            width: 90%;
+            height: 25%;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+
+    <div class="contenedor-completo">
+        <div class="camara-digitador">
+            <!-- Se añaden atributos obligatorios para móviles -->
+            <video id="webcam" autoplay playsinline muted></video>
+        </div>
+
+        <div class="muestra-numero-escaneado">
+            <div class="total" id="total-texto">TOTAL: $0.00</div>
+            <button class="capturar-imagen" onclick="capturar()">Capturar Imagen</button>
+        </div>
+    </div>
+
+<script>
+    const video = document.getElementById('webcam');
+
+    async function iniciarCamara() {
+        // Validación previa para saber si el navegador soporta la API
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert("⚠️ Tu navegador no soporta el acceso a la cámara.");
+            return;
+        }
+
+        try {
+            const constraints = {
+                video: {
+                    facingMode: { ideal: "environment" },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+            await video.play();
+        } catch (err) {
+            console.warn("No se pudo iniciar la cámara trasera, intentando con cámara genérica...", err);
+            try {
+                const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = fallbackStream;
+                await video.play();
+            } catch (e) {
+                alert("❌ No se pudo acceder a la cámara. Asegúrate de abrir la página mediante HTTPS o localhost y de haber otorgado los permisos.");
+                console.error(e);
+            }
+        }
+    }
+
+    function capturar() {
+        alert("¡Botón presionado! Aquí procesarás la imagen.");
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        iniciarCamara();
+
+        // Respaldo: si el navegador bloquea el autoplay, iniciar en el primer toque
+        document.addEventListener('touchstart', function initOnTouch() {
+            if (!video.srcObject) {
+                iniciarCamara();
+            }
+            document.removeEventListener('touchstart', initOnTouch);
+        }, { once: true });
+
+        document.addEventListener('click', function initOnClick() {
+            if (!video.srcObject) {
+                iniciarCamara();
+            }
+            document.removeEventListener('click', initOnClick);
+        }, { once: true });
+    });
+</script>
+</body>
+</html>
