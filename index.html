@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Añadido maximum-scale y user-scalable para mejor comportamiento en pantallas táctiles -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>compras y sumas de precio directo</title>
+    <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
 </head>
 <body>
     <style>
@@ -43,6 +43,19 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+        }
+
+        .resultado-escaneo{
+            position: absolute;
+            top: 2%;
+            left: 10%;
+            width: 80%;
+            text-align: center;
+            color: lime;
+            font-size: 14px;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px black;
+            z-index: 10;
         }
 
         .muestra-numero-escaneado{
@@ -91,8 +104,8 @@
     </style>
 
     <div class="contenedor-completo">
+        <div class="resultado-escaneo" id="resultado-escaneo">Escaneando...</div>
         <div class="camara-digitador">
-            <!-- Se añaden atributos obligatorios para móviles -->
             <video id="webcam" autoplay playsinline muted></video>
         </div>
 
@@ -104,60 +117,70 @@
 
 <script>
     const video = document.getElementById('webcam');
+    const resultadoEscaneo = document.getElementById('resultado-escaneo');
+    const totalTexto = document.getElementById('total-texto');
+    let ultimoPrecioValido = null;
+    let codeReader = null;
 
     async function iniciarCamara() {
-        // Validación previa para saber si el navegador soporta la API
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert("⚠️ Tu navegador no soporta el acceso a la cámara.");
+            alert("Tu navegador no soporta el acceso a la camara.");
             return;
         }
 
         try {
-            const constraints = {
-                video: {
-                    facingMode: { ideal: "environment" },
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                }
-            };
-
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+            });
             video.srcObject = stream;
             await video.play();
+            iniciarEscaneo();
         } catch (err) {
-            console.warn("No se pudo iniciar la cámara trasera, intentando con cámara genérica...", err);
             try {
                 const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
                 video.srcObject = fallbackStream;
                 await video.play();
+                iniciarEscaneo();
             } catch (e) {
-                alert("❌ No se pudo acceder a la cámara. Asegúrate de abrir la página mediante HTTPS o localhost y de haber otorgado los permisos.");
-                console.error(e);
+                alert("No se pudo acceder a la camara. Abre la pagina con HTTPS o localhost.");
             }
         }
     }
 
+    function iniciarEscaneo() {
+        codeReader = new ZXing.BrowserMultiFormatReader();
+        codeReader.decodeFromVideoElement(video, (result, err) => {
+            if (result) {
+                const texto = result.getText();
+                resultadoEscaneo.textContent = "Detectado: " + texto;
+                const precio = parseFloat(texto);
+                if (!isNaN(precio) && precio >= 0.00 && precio <= 500.00) {
+                    ultimoPrecioValido = precio.toFixed(2);
+                    resultadoEscaneo.style.color = "lime";
+                    resultadoEscaneo.textContent = "Precio valido: $" + ultimoPrecioValido;
+                } else {
+                    resultadoEscaneo.style.color = "red";
+                    resultadoEscaneo.textContent = "Fuera de rango: " + texto;
+                }
+            }
+        }).catch(err => {
+            console.log("Error de escaneo:", err);
+        });
+    }
+
     function capturar() {
-        alert("¡Botón presionado! Aquí procesarás la imagen.");
+        if (ultimoPrecioValido !== null) {
+            totalTexto.textContent = "TOTAL: $" + ultimoPrecioValido;
+            totalTexto.style.color = "green";
+        } else {
+            totalTexto.textContent = "TOTAL: $0.00";
+            resultadoEscaneo.style.color = "yellow";
+            resultadoEscaneo.textContent = "No se detecto precio valido (0.00 - 500.00)";
+        }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
         iniciarCamara();
-
-        // Respaldo: si el navegador bloquea el autoplay, iniciar en el primer toque
-        document.addEventListener('touchstart', function initOnTouch() {
-            if (!video.srcObject) {
-                iniciarCamara();
-            }
-            document.removeEventListener('touchstart', initOnTouch);
-        }, { once: true });
-
-        document.addEventListener('click', function initOnClick() {
-            if (!video.srcObject) {
-                iniciarCamara();
-            }
-            document.removeEventListener('click', initOnClick);
-        }, { once: true });
     });
 </script>
 </body>
