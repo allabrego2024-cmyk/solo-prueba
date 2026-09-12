@@ -4,35 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>compras y sumas de precio directo</title>
-    <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
 </head>
 <body>
     <style>
-        body{
+        * { box-sizing: border-box; }
+        body {
             background-color: black;
             margin: 0;
             padding: 0;
             font-family: sans-serif;
         }
 
-        .contenedor-completo{
+        .contenedor-completo {
             background:
-            radial-gradient(circle at top left, rgb(53, 53, 53) 20%, transparent 60%),
-            radial-gradient(circle at top right, rgb(53, 53, 53) 20%, transparent 60%),
-            radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.651) 10%, transparent 40%),
-            radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.651) 10%, transparent 40%);
+                radial-gradient(circle at top left, rgb(53, 53, 53) 20%, transparent 60%),
+                radial-gradient(circle at top right, rgb(53, 53, 53) 20%, transparent 60%),
+                radial-gradient(circle at bottom left, rgba(255,255,255,0.651) 10%, transparent 40%),
+                radial-gradient(circle at bottom right, rgba(255,255,255,0.651) 10%, transparent 40%);
             width: 100vw;
             height: 100vh;
             position: relative;
             overflow: hidden;
         }
 
-        .camara-digitador{
-            border: 2px solid rgb(255, 255, 255);
+        .camara-digitador {
+            border: 2px solid white;
             width: 80%;
             height: 35%;
             position: absolute;
-            top: 5%;
+            top: 3%;
             left: 10%;
             border-radius: 10px;
             overflow: hidden;
@@ -45,143 +45,219 @@
             object-fit: cover;
         }
 
-        .resultado-escaneo{
+        .resultado-escaneo {
             position: absolute;
-            top: 2%;
+            top: 1%;
             left: 10%;
             width: 80%;
             text-align: center;
             color: lime;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
             text-shadow: 1px 1px 3px black;
             z-index: 10;
         }
 
-        .muestra-numero-escaneado{
+        .panel-precios {
             background-color: rgba(255, 255, 255, 0.9);
             border: 2px solid black;
             border-radius: 20px;
             width: 80%;
-            height: 45%;
             position: absolute;
-            top: 45%;
+            top: 42%;
             left: 10%;
+            padding: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: space-around;
-            padding: 10px;
-            box-sizing: border-box;
+            gap: 6px;
         }
 
-        .total{
+        .lista-precios {
+            width: 90%;
+            max-height: 120px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background: white;
+            font-size: 14px;
+        }
+
+        .lista-precios .item-precio {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .lista-precios .item-precio:last-child { border-bottom: none; }
+
+        .lista-precios .item-precio .eliminar {
+            color: red;
+            cursor: pointer;
+            font-weight: bold;
+            padding: 0 6px;
+        }
+
+        .total-box {
             background-color: white;
             border: 2px solid black;
             width: 90%;
-            height: 25%;
             border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 20px;
             font-weight: bold;
+            padding: 8px;
         }
 
-        .capturar-imagen{
+        .acciones {
+            display: flex;
+            gap: 8px;
+            width: 90%;
+        }
+
+        .capturar-imagen {
             background-color: greenyellow;
             border: none;
             border-radius: 30px;
-            width: 90%;
-            height: 25%;
-            font-size: 18px;
+            flex: 1;
+            padding: 12px 0;
+            font-size: 15px;
             font-weight: bold;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        }
+
+        .borrar-todo {
+            background-color: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            flex: 1;
+            padding: 12px 0;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
         }
     </style>
 
     <div class="contenedor-completo">
-        <div class="resultado-escaneo" id="resultado-escaneo">Escaneando...</div>
+        <div class="resultado-escaneo" id="resultado-escaneo">Escaneando codigo de barras...</div>
         <div class="camara-digitador">
             <video id="webcam" autoplay playsinline muted></video>
         </div>
 
-        <div class="muestra-numero-escaneado">
-            <div class="total" id="total-texto">TOTAL: $0.00</div>
-            <button class="capturar-imagen" onclick="capturar()">Capturar Imagen</button>
+        <div class="panel-precios">
+            <div class="lista-precios" id="lista-precios"></div>
+            <div class="total-box" id="total-texto">TOTAL: $0.00</div>
+            <div class="acciones">
+                <button class="capturar-imagen" onclick="capturar()">Capturar</button>
+                <button class="borrar-todo" onclick="borrarTodo()">Borrar todo</button>
+            </div>
         </div>
     </div>
 
-<script>
-    const video = document.getElementById('webcam');
-    const resultadoEscaneo = document.getElementById('resultado-escaneo');
-    const totalTexto = document.getElementById('total-texto');
-    let ultimoPrecioValido = null;
-    let codeReader = null;
+    <script src="zxing.min.js"></script>
+    <script>
+        const video = document.getElementById('webcam');
+        const resultadoEscaneo = document.getElementById('resultado-escaneo');
+        const totalTexto = document.getElementById('total-texto');
+        const listaPrecios = document.getElementById('lista-precios');
 
-    async function iniciarCamara() {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert("Tu navegador no soporta el acceso a la camara.");
-            return;
-        }
+        let preciosCapturados = [];
+        let ultimoPrecioValido = null;
+        let codeReader = null;
 
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
-            });
-            video.srcObject = stream;
-            await video.play();
-            iniciarEscaneo();
-        } catch (err) {
+        async function iniciarCamara() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                resultadoEscaneo.textContent = "Navegador no compatible";
+                resultadoEscaneo.style.color = "red";
+                return;
+            }
             try {
-                const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                video.srcObject = fallbackStream;
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                });
+                video.srcObject = stream;
                 await video.play();
                 iniciarEscaneo();
-            } catch (e) {
-                alert("No se pudo acceder a la camara. Abre la pagina con HTTPS o localhost.");
-            }
-        }
-    }
-
-    function iniciarEscaneo() {
-        codeReader = new ZXing.BrowserMultiFormatReader();
-        codeReader.decodeFromVideoElement(video, (result, err) => {
-            if (result) {
-                const texto = result.getText();
-                resultadoEscaneo.textContent = "Detectado: " + texto;
-                const precio = parseFloat(texto);
-                if (!isNaN(precio) && precio >= 0.00 && precio <= 500.00) {
-                    ultimoPrecioValido = precio.toFixed(2);
-                    resultadoEscaneo.style.color = "lime";
-                    resultadoEscaneo.textContent = "Precio valido: $" + ultimoPrecioValido;
-                } else {
+            } catch (err) {
+                try {
+                    const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = fallbackStream;
+                    await video.play();
+                    iniciarEscaneo();
+                } catch (e) {
+                    resultadoEscaneo.textContent = "No se pudo acceder a la camara";
                     resultadoEscaneo.style.color = "red";
-                    resultadoEscaneo.textContent = "Fuera de rango: " + texto;
                 }
             }
-        }).catch(err => {
-            console.log("Error de escaneo:", err);
-        });
-    }
-
-    function capturar() {
-        if (ultimoPrecioValido !== null) {
-            totalTexto.textContent = "TOTAL: $" + ultimoPrecioValido;
-            totalTexto.style.color = "green";
-        } else {
-            totalTexto.textContent = "TOTAL: $0.00";
-            resultadoEscaneo.style.color = "yellow";
-            resultadoEscaneo.textContent = "No se detecto precio valido (0.00 - 500.00)";
         }
-    }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        iniciarCamara();
-    });
-</script>
+        function iniciarEscaneo() {
+            codeReader = new ZXing.BrowserMultiFormatReader();
+            codeReader.decodeFromVideoElement(video, (result, err) => {
+                if (result) {
+                    const texto = result.getText();
+                    const precio = parseFloat(texto);
+                    if (!isNaN(precio) && precio >= 0.00 && precio <= 500.00) {
+                        ultimoPrecioValido = precio;
+                        resultadoEscaneo.style.color = "lime";
+                        resultadoEscaneo.textContent = "Detectado: $" + precio.toFixed(2) + " - Toca Capturar";
+                    } else {
+                        resultadoEscaneo.style.color = "red";
+                        resultadoEscaneo.textContent = "Fuera de rango: " + texto;
+                    }
+                }
+            }).catch(err => {
+                console.log("Error escaneo:", err);
+            });
+        }
+
+        function capturar() {
+            if (ultimoPrecioValido !== null) {
+                preciosCapturados.push(ultimoPrecioValido);
+                actualizarLista();
+                ultimoPrecioValido = null;
+                resultadoEscaneo.textContent = "Escaneando codigo de barras...";
+                resultadoEscaneo.style.color = "lime";
+            } else {
+                resultadoEscaneo.textContent = "No hay precio valido. Apunta al codigo...";
+                resultadoEscaneo.style.color = "yellow";
+            }
+        }
+
+        function actualizarLista() {
+            listaPrecios.innerHTML = "";
+            let total = 0;
+            preciosCapturados.forEach((precio, i) => {
+                total += precio;
+                const div = document.createElement("div");
+                div.className = "item-precio";
+                div.innerHTML = "<span>" + (i + 1) + ". $" + precio.toFixed(2) + "</span><span class='eliminar' onclick='eliminarPrecio(" + i + ")'>X</span>";
+                listaPrecios.appendChild(div);
+            });
+            totalTexto.textContent = "TOTAL: $" + total.toFixed(2);
+            listaPrecios.scrollTop = listaPrecios.scrollHeight;
+        }
+
+        function eliminarPrecio(index) {
+            preciosCapturados.splice(index, 1);
+            actualizarLista();
+        }
+
+        function borrarTodo() {
+            preciosCapturados = [];
+            actualizarLista();
+            totalTexto.textContent = "TOTAL: $0.00";
+            resultadoEscaneo.textContent = "Escaneando codigo de barras...";
+            resultadoEscaneo.style.color = "lime";
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            iniciarCamara();
+        });
+    </script>
 </body>
 </html>
