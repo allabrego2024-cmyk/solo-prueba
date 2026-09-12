@@ -45,6 +45,8 @@
             object-fit: cover;
         }
 
+        #canvas-oculto { display: none; }
+
         .resultado-escaneo {
             position: absolute;
             top: 1%;
@@ -83,16 +85,16 @@
             font-size: 14px;
         }
 
-        .lista-precios .item-precio {
+        .item-precio {
             display: flex;
             justify-content: space-between;
             padding: 4px 10px;
             border-bottom: 1px solid #eee;
         }
 
-        .lista-precios .item-precio:last-child { border-bottom: none; }
+        .item-precio:last-child { border-bottom: none; }
 
-        .lista-precios .item-precio .eliminar {
+        .eliminar {
             color: red;
             cursor: pointer;
             font-weight: bold;
@@ -143,10 +145,11 @@
     </style>
 
     <div class="contenedor-completo">
-        <div class="resultado-escaneo" id="resultado-escaneo">Escaneando codigo de barras...</div>
+        <div class="resultado-escaneo" id="resultado-escaneo">Preparando camara...</div>
         <div class="camara-digitador">
             <video id="webcam" autoplay playsinline muted></video>
         </div>
+        <canvas id="canvas-oculto"></canvas>
 
         <div class="panel-precios">
             <div class="lista-precios" id="lista-precios"></div>
@@ -158,16 +161,18 @@
         </div>
     </div>
 
-    <script src="zxing.min.js"></script>
+    <script src="tesseract.min.js"></script>
     <script>
         const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas-oculto');
+        const ctx = canvas.getContext('2d');
         const resultadoEscaneo = document.getElementById('resultado-escaneo');
         const totalTexto = document.getElementById('total-texto');
         const listaPrecios = document.getElementById('lista-precios');
 
         let preciosCapturados = [];
-        let ultimoPrecioValido = null;
-        let codeReader = null;
+        let worker = null;
+        let camaraLista = false;
 
         async function iniciarCamara() {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -181,13 +186,17 @@
                 });
                 video.srcObject = stream;
                 await video.play();
-                iniciarEscaneo();
+                camaraLista = true;
+                resultadoEscaneo.textContent = "Camara lista. Toca Capturar";
+                resultadoEscaneo.style.color = "lime";
             } catch (err) {
                 try {
                     const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
                     video.srcObject = fallbackStream;
                     await video.play();
-                    iniciarEscaneo();
+                    camaraLista = true;
+                    resultadoEscaneo.textContent = "Camara lista. Toca Capturar";
+                    resultadoEscaneo.style.color = "lime";
                 } catch (e) {
                     resultadoEscaneo.textContent = "No se pudo acceder a la camara";
                     resultadoEscaneo.style.color = "red";
@@ -195,36 +204,68 @@
             }
         }
 
-        function iniciarEscaneo() {
-            codeReader = new ZXing.BrowserMultiFormatReader();
-            codeReader.decodeFromVideoElement(video, (result, err) => {
-                if (result) {
-                    const texto = result.getText();
-                    const precio = parseFloat(texto);
-                    if (!isNaN(precio) && precio >= 0.00 && precio <= 500.00) {
-                        ultimoPrecioValido = precio;
-                        resultadoEscaneo.style.color = "lime";
-                        resultadoEscaneo.textContent = "Detectado: $" + precio.toFixed(2) + " - Toca Capturar";
-                    } else {
-                        resultadoEscaneo.style.color = "red";
-                        resultadoEscaneo.textContent = "Fuera de rango: " + texto;
-                    }
-                }
-            }).catch(err => {
-                console.log("Error escaneo:", err);
+        async function iniciarWorker() {
+            if (worker) return worker;
+            resultadoEscaneo.textContent = "Cargando OCR...";
+            resultadoEscaneo.style.color = "yellow";
+            worker = await Tesseract.createWorker('eng', 1, {
+                workerPath: 'worker.min.js',
+                langPath: '.',
+                cachePath: '.',
+                corePath: 'tesseract.min.js'
             });
+            await worker.setParameters({
+                tessedit_char_whitelist: '0123456789.'
+            });
+            resultadoEscaneo.textContent = "OCR listo. Toca Capturar";
+            resultadoEscaneo.style.color = "lime";
+            return worker;
         }
 
-        function capturar() {
-            if (ultimoPrecioValido !== null) {
-                preciosCapturados.push(ultimoPrecioValido);
-                actualizarLista();
-                ultimoPrecioValido = null;
-                resultadoEscaneo.textContent = "Escaneando codigo de barras...";
-                resultadoEscaneo.style.color = "lime";
-            } else {
-                resultadoEscaneo.textContent = "No hay precio valido. Apunta al codigo...";
+        function capturarFrame() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/png');
+        }
+
+        async function capturar() {
+            if (!camaraLista) {
+                resultadoEscaneo.textContent = "Espera a que la camara este lista...";
                 resultadoEscaneo.style.color = "yellow";
+                return;
+            }
+
+            resultadoEscaneo.textContent = "Leyendo numero...";
+            resultadoEscaneo.style.color = "yellow";
+
+            const w = await iniciarWorker();
+            const imagen = capturarFrame();
+            const { data } = await w.recognize(imagen);
+
+            const textoLimpio = data.text.replace(/[^0-9.]/g, '');
+            const numeros = textoLimpio.match(/\d+\.?\d{0,2}/g);
+
+            if (numeros && numeros.length > 0) {
+                let encontrado = false;
+                for (const num of numeros) {
+                    const precio = parseFloat(num);
+                    if (precio >= 0.00 && precio <= 500.00) {
+                        preciosCapturados.push(parseFloat(precio.toFixed(2)));
+                        actualizarLista();
+                        resultadoEscaneo.textContent = "Agregado: $" + precio.toFixed(2);
+                        resultadoEscaneo.style.color = "lime";
+                        encontrado = true;
+                        break;
+                    }
+                }
+                if (!encontrado) {
+                    resultadoEscaneo.textContent = "Numero fuera de rango (0.00-500.00)";
+                    resultadoEscaneo.style.color = "red";
+                }
+            } else {
+                resultadoEscaneo.textContent = "No se detecto numero. Intenta de nuevo.";
+                resultadoEscaneo.style.color = "red";
             }
         }
 
@@ -251,7 +292,7 @@
             preciosCapturados = [];
             actualizarLista();
             totalTexto.textContent = "TOTAL: $0.00";
-            resultadoEscaneo.textContent = "Escaneando codigo de barras...";
+            resultadoEscaneo.textContent = "Camara lista. Toca Capturar";
             resultadoEscaneo.style.color = "lime";
         }
 
